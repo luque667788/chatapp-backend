@@ -39,7 +39,7 @@ func (pool *Pool) subscribeToMessages() {
 		switch msg.Channel {
 		case registerChannel:
 
-			fmt.Println("telling all users on " + pool.name + " that someone arrived and updated the users list")
+			fmt.Println("--|sending  to all users on " + pool.name + "  the updated the users list|")
 			for _, _client := range pool.Clients {
 				_client.Conn.WriteMessage(1, []byte(msg.Payload))
 
@@ -89,6 +89,20 @@ func NewPool() *Pool {
 	}
 }
 
+func GetAllUsers(conn *redis.Client) []string {
+	//gets all users including the recently added user
+	val, err := conn.Do(ctx, "HKEYS", "clients").Result()
+	if err != nil {
+		panic(err)
+	}
+
+	allusers := make([]string, len(val.([]interface{})))
+	for p, value := range val.([]interface{}) {
+		allusers[p] = value.(string)
+	}
+	return allusers
+}
+
 func (pool *Pool) Start() {
 	val, err := pool.Redis.Do(ctx, "INCR", "server:number").Result()
 	if err != nil {
@@ -110,17 +124,31 @@ func (pool *Pool) Start() {
 				panic(err)
 			}
 
-			//gets all users including the recently added user
-			val, err := pool.Redis.Do(ctx, "HKEYS", "clients").Result()
+			allusers := GetAllUsers(pool.Redis)
+			// transform it to json
+			var allusersjson allUsersMessage = allUsersMessage{
+				Type:     3,
+				AllUsers: allusers,
+			}
+			payload, err := json.Marshal(allusersjson)
+			if err != nil {
+				panic(err)
+			}
+			//publish to redis
+			//in the future make a better way of updating user list in front-end
+			pool.publishMessage(payload, registerChannel)
+
+			//add to local map of users in the server
+			pool.Clients[client.username] = client
+			break
+		// unregister from the pool
+		case client := <-pool.Unregister:
+			_, err := pool.Redis.Do(ctx, "HDEL", "clients", client.username).Result()
 			if err != nil {
 				panic(err)
 			}
 
-			allusers := make([]string, len(val.([]interface{})))
-			for p, value := range val.([]interface{}) {
-				allusers[p] = value.(string)
-			}
-
+			allusers := GetAllUsers(pool.Redis)
 			// transform it to json
 			var allusersjson allUsersMessage = allUsersMessage{
 				Type:     3,
@@ -132,19 +160,8 @@ func (pool *Pool) Start() {
 			}
 			//publish to redis
 			pool.publishMessage(payload, registerChannel)
-
-			//add to local map of users in the server
-			pool.Clients[client.username] = client
-			break
-		// unregister from the pool
-		case client := <-pool.Unregister:
 			delete(pool.Clients, client.username)
-
-			//[TODO] --> handle better user disconection
-			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
-			for _, _client := range pool.Clients {
-				_client.Conn.WriteJSON(Message{Type: 1, Content: "User Disconnected..."})
-			}
+			fmt.Println("user disconnected ")
 			break
 		//received a message
 		case message := <-pool.Broadcast:
@@ -172,4 +189,35 @@ func (pool *Pool) Start() {
 
 		}
 	}
+}
+
+func (pool *Pool) PowerOff() {
+	// properly warn other servers that this server is turning off
+	//need to implemenet a way of transfering clients
+	// or implement a way of warining client that the server was powered off
+	//and maybe gray out the client on the front end
+	fmt.Println(pool.name + " powering off")
+	for _, client := range pool.Clients {
+		_, err := pool.Redis.Do(ctx, "HDEL", "clients", client.username).Result()
+		if err != nil {
+			panic(err)
+		}
+
+		allusers := GetAllUsers(pool.Redis)
+		// transform it to json
+		var allusersjson allUsersMessage = allUsersMessage{
+			Type:     3,
+			AllUsers: allusers,
+		}
+		payload, err := json.Marshal(allusersjson)
+		if err != nil {
+			panic(err)
+		}
+		//publish to redis
+		pool.publishMessage(payload, registerChannel)
+		fmt.Println("user " + client.username + " disconnected ")
+		delete(pool.Clients, client.username)
+
+	}
+
 }
