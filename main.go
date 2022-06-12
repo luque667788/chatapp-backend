@@ -16,8 +16,10 @@ func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &websocket.Client{
-		Conn: conn,
-		Pool: pool,
+		Conn:      conn,
+		Pool:      pool,
+		StopChan:  make(chan bool),
+		WriteChan: make(chan []byte),
 	}
 
 	// it is OK to call this function for here because each endpoint is a goroutines

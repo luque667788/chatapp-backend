@@ -2,9 +2,8 @@ package websocket
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
+	"sync"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -13,20 +12,37 @@ var ctx = context.Background()
 var channelGeneral = "GENERAL"
 var registerChannel = "REGISTER"
 
-func (pool *Pool) publishMessage(payload []byte, channel string) {
-
-	err2 := pool.Redis.Publish(ctx, channel, payload).Err()
-
-	if err2 != nil {
-		log.Println(err2)
-		panic(err2)
-	}
+// we need a pool to avoid concurrent acess to the Clients map ( and also secundarily to SendMsg a Message)
+type Pool struct {
+	Register   chan *Client
+	Unregister chan *Client
+	Clients    map[string]*Client
+	SendMsg    chan Message
+	Redis      *redis.Client
+	name       string
+	mu         sync.Mutex
+	redismu    sync.Mutex
 }
 
+func NewPool() *Pool {
+	//maybe add dependency injection here in the future not very urgent
+	return &Pool{
+		Register:   make(chan *Client),
+		Unregister: make(chan *Client),
+		Clients:    make(map[string]*Client),
+		SendMsg:    make(chan Message),
+		Redis: redis.NewClient(&redis.Options{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		}),
+		name: "",
+	}
+}
 func (pool *Pool) subscribeToMessages() {
-
+	pool.redismu.Lock()
 	pubsub := pool.Redis.Subscribe(ctx, pool.name, registerChannel)
-
+	pool.redismu.Unlock()
 	// Close the subscription when we are done.
 	defer pubsub.Close()
 
@@ -38,77 +54,38 @@ func (pool *Pool) subscribeToMessages() {
 
 		switch msg.Channel {
 		case registerChannel:
-
+			pool.mu.Lock()
 			fmt.Println("--|sending  to all users on " + pool.name + "  the updated the users list|")
 			for _, _client := range pool.Clients {
-				_client.Conn.WriteMessage(1, []byte(msg.Payload))
+				_client.WriteChan <- []byte(msg.Payload)
 
 			}
+			pool.mu.Unlock()
 
 		case pool.name:
-			//decode message
-			var message Message
-			if err := json.Unmarshal([]byte(msg.Payload), &message); err != nil {
-				panic(err)
-			}
+			//decode Message
+			var Message = DecodeJson([]byte(msg.Payload))
 
-			fmt.Println("Sending message to:" + message.Destinatary + " from: " + message.User)
-			if err := pool.Clients[message.Destinatary].Conn.WriteMessage(1, []byte(msg.Payload)); err != nil {
-				fmt.Println(err)
-				return
-			}
+			fmt.Println("Sending Message to:" + Message.Destinatary + " from: " + Message.User)
+			pool.mu.Lock()
+			pool.Clients[Message.Destinatary].WriteChan <- []byte(msg.Payload)
+			pool.mu.Unlock()
 
 		}
 
 	}
 
 }
-
-// we need a pool to avoid concurrent acess to the Clients map ( and also secundarily to broadcast a message)
-type Pool struct {
-	Register   chan *Client
-	Unregister chan *Client
-	Clients    map[string]*Client
-	Broadcast  chan Message
-	Redis      *redis.Client
-	name       string
-}
-
-func NewPool() *Pool {
-	return &Pool{
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		Clients:    make(map[string]*Client),
-		Broadcast:  make(chan Message),
-		Redis: redis.NewClient(&redis.Options{
-			Addr:     "localhost:6379",
-			Password: "",
-			DB:       0,
-		}),
-		name: "",
-	}
-}
-
-func GetAllUsers(conn *redis.Client) []string {
-	//gets all users including the recently added user
-	val, err := conn.Do(ctx, "HKEYS", "clients").Result()
-	if err != nil {
-		panic(err)
-	}
-
-	allusers := make([]string, len(val.([]interface{})))
-	for p, value := range val.([]interface{}) {
-		allusers[p] = value.(string)
-	}
-	return allusers
-}
-
 func (pool *Pool) Start() {
+	pool.redismu.Lock()
 	val, err := pool.Redis.Do(ctx, "INCR", "server:number").Result()
+	pool.redismu.Unlock()
 	if err != nil {
 		panic(err)
 	}
+	pool.mu.Lock()
 	pool.name = fmt.Sprint("server:", val)
+	pool.mu.Unlock()
 
 	fmt.Println("name " + pool.name)
 	go pool.subscribeToMessages()
@@ -116,76 +93,127 @@ func (pool *Pool) Start() {
 		select {
 		//register in the pool
 		case client := <-pool.Register:
-			fmt.Println("user", client.username, "will be register at", pool.name)
+			client.mu.Lock()
+			if CheckUserHashExist(pool.Redis, &pool.mu, client.username) {
 
-			//add user to redis all users hash
-			_, err := pool.Redis.Do(ctx, "HSET", "clients", client.username, pool.name).Result()
-			if err != nil {
-				panic(err)
-			}
-
-			allusers := GetAllUsers(pool.Redis)
-			// transform it to json
-			var allusersjson allUsersMessage = allUsersMessage{
-				Type:     3,
-				AllUsers: allusers,
-			}
-			payload, err := json.Marshal(allusersjson)
-			if err != nil {
-				panic(err)
-			}
-			//publish to redis
-			//in the future make a better way of updating user list in front-end
-			pool.publishMessage(payload, registerChannel)
-
-			//add to local map of users in the server
-			pool.Clients[client.username] = client
-			break
-		// unregister from the pool
-		case client := <-pool.Unregister:
-			_, err := pool.Redis.Do(ctx, "HDEL", "clients", client.username).Result()
-			if err != nil {
-				panic(err)
-			}
-
-			allusers := GetAllUsers(pool.Redis)
-			// transform it to json
-			var allusersjson allUsersMessage = allUsersMessage{
-				Type:     3,
-				AllUsers: allusers,
-			}
-			payload, err := json.Marshal(allusersjson)
-			if err != nil {
-				panic(err)
-			}
-			//publish to redis
-			pool.publishMessage(payload, registerChannel)
-			delete(pool.Clients, client.username)
-			fmt.Println("user disconnected ")
-			break
-		//received a message
-		case message := <-pool.Broadcast:
-			//send message to user who sent the message
-			if err := pool.Clients[message.User].Conn.WriteJSON(message); err != nil {
-				fmt.Println(err)
-				return
-			}
-			payload, err := json.Marshal(message)
-			if err != nil {
-				panic(err)
-			}
-
-			server, err := pool.Redis.Do(ctx, "HGET", "clients", message.Destinatary).Text()
-			if err != nil {
-				if err == redis.Nil {
-					fmt.Println("user not found")
+				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
+				if err != nil {
+					client.StopChan <- true
+					fmt.Println("incorrect password for username: ", client.username)
+					client.mu.Unlock()
 					break
 				} else {
+					pool.mu.Lock()
+					fmt.Println("user", client.username, "will LOGIN at", pool.name)
+					SetUserHashItem(pool.Redis, &pool.redismu, client.username, "server", pool.name)
+					pool.mu.Unlock()
+					ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
+					pool.mu.Lock()
+					pool.Clients[client.username] = client
+					UpdateRedisClientsList(pool.Redis, &pool.redismu)
+					pool.mu.Unlock()
+					SendPreviousMessages(pool.Redis, &pool.redismu, client)
+
+					//SendPreviousMessages()
+					client.mu.Unlock()
+					break
+
+				}
+
+			} else {
+				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
+
+				//add user password
+				Hash, err := Hash(client.password)
+				if err != nil {
 					panic(err)
 				}
+				client.password = string(Hash)
+				pool.mu.Lock()
+				AddUserRedis(pool.Redis, &pool.redismu, pool.name, client.username)
+				pool.mu.Unlock()
+				SetUserHashItem(pool.Redis, &pool.redismu, client.username, "password", client.password)
+				ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
+				pool.mu.Lock()
+				pool.Clients[client.username] = client
+				pool.mu.Unlock()
+				//publish to redis
+				//in the future make a better way of updating user list in front-end
+				UpdateRedisClientsList(pool.Redis, &pool.redismu)
+
+				//add to local map of users in the server
+
+				client.mu.Unlock()
+				break
 			}
-			//send message to user wo will receive message (it may be in other server)
-			pool.publishMessage(payload, server)
+
+		// unregister from the pool
+		case client := <-pool.Unregister:
+			client.mu.Lock()
+			if CheckUserHashExist(pool.Redis, &pool.redismu, client.username) == false {
+				fmt.Println("user: ", client.username, "do not exist but tries to unregister")
+				client.mu.Unlock()
+				break
+			}
+			if CheckUserOnline(pool.Redis, &pool.redismu, client.username) == false {
+				fmt.Println("-------------------->user ", client.username, " was rejected and is diconnecting")
+				client.mu.Unlock()
+				break
+			}
+			DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
+			fmt.Println("user", client.username, "disconnected ")
+			pool.mu.Lock()
+			delete(pool.Clients, client.username)
+			pool.mu.Unlock()
+			client.mu.Unlock()
+			break
+		//received a Message
+		case Message := <-pool.SendMsg:
+			if CheckUserHashExist(pool.Redis, &pool.redismu, Message.Destinatary) == false {
+				fmt.Println("user: ", Message.Destinatary, "do not exist but tries to receive message")
+				break
+			}
+			if CheckUserHashExist(pool.Redis, &pool.redismu, Message.User) == false {
+				fmt.Println("user: ", Message.User, "do not exist But something is very wrong")
+				panic("USER DOESE EXISTS BUT SENDS MESSAGES (code has a bug!!!!!!)")
+			}
+			if CheckUserOnline(pool.Redis, &pool.redismu, Message.User) == false {
+				fmt.Println(" user: ", Message.Destinatary, "do is NOT ONLINE but tries to SEND message")
+				panic("USER IS NOT ONLINE BUT SENDS MESSAGES (code has a bug!!!!!!)")
+				break
+			}
+			// FOR NOW it wil be like that
+			if CheckUserOnline(pool.Redis, &pool.redismu, Message.Destinatary) == false {
+				fmt.Println(" user: ", Message.Destinatary, "do is NOT ONLINE sp we are archiving the messages for later sending it when avaible")
+				pool.mu.Lock()
+				pool.Clients[Message.User].WriteChan <- []byte(EncodeJson(Message))
+				pool.mu.Unlock()
+				SaveMessageDB(pool.Redis, &pool.redismu, Message)
+				break
+			}
+
+			/*
+				IMPLEMENTATION
+					-each user has a set with conversation he participates
+
+					-after sending a message we archive the message to a set with all messages of a conversation
+
+					-and the destinatary and sender of the message conversation list sets will be added
+					(or overwritten rewritten) with the messages conversation(which we do not know)
+
+					-the name of the chat will be the names of the users in alphabetical order like "alice:joao"
+
+			*/
+
+			//send Message to user who sent the Message
+			pool.mu.Lock()
+			pool.Clients[Message.User].WriteChan <- []byte(EncodeJson(Message))
+
+			//send Message to user wo will receive Message (it may be in other server)
+			publishMessage(pool.Redis, &pool.redismu, EncodeJson(Message), GetUserServerRedis(pool.Redis, &pool.redismu, Message.Destinatary))
+			pool.mu.Unlock()
+			SaveMessageDB(pool.Redis, &pool.redismu, Message)
+			break
 
 		}
 	}
@@ -197,27 +225,16 @@ func (pool *Pool) PowerOff() {
 	// or implement a way of warining client that the server was powered off
 	//and maybe gray out the client on the front end
 	fmt.Println(pool.name + " powering off")
+	pool.mu.Lock()
 	for _, client := range pool.Clients {
-		_, err := pool.Redis.Do(ctx, "HDEL", "clients", client.username).Result()
-		if err != nil {
-			panic(err)
-		}
+		client.mu.Lock()
+		//RemoveUserRedis(pool.Redis, client.username)
 
-		allusers := GetAllUsers(pool.Redis)
-		// transform it to json
-		var allusersjson allUsersMessage = allUsersMessage{
-			Type:     3,
-			AllUsers: allusers,
-		}
-		payload, err := json.Marshal(allusersjson)
-		if err != nil {
-			panic(err)
-		}
-		//publish to redis
-		pool.publishMessage(payload, registerChannel)
-		fmt.Println("user " + client.username + " disconnected ")
+		UpdateRedisClientsList(pool.Redis, &pool.redismu)
+		fmt.Println("user", client.username, "disconnected ")
 		delete(pool.Clients, client.username)
-
+		client.mu.Unlock()
 	}
+	pool.mu.Unlock()
 
 }
