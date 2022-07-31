@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 )
 
 func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
@@ -36,24 +34,14 @@ func setupRoutes(pool *websocket.Pool) {
 }
 
 func main() {
-	PORT := os.Args[1:]
-	fmt.Println("Server on listening port: " + PORT[0])
+	PORT := "3030"
+	fmt.Println("Server on listening port: " + PORT)
 
 	pool := websocket.NewPool()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		for sig := range c {
-			// sig is a ^C, handle it
-			log.Printf("captured %v, stopping profiler and exiting..", sig)
-			pool.PowerOff()
-			os.Exit(1)
-		}
-	}()
 	defer pool.PowerOff()
 	setupRoutes(pool)
 
-	if err := http.ListenAndServe(":"+PORT[0], nil); err != nil {
+	if err := http.ListenAndServe(":"+PORT, nil); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 
