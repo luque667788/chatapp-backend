@@ -24,6 +24,22 @@ func publishMessage(conn *redis.Client, mu *sync.Mutex, payload []byte, channel 
 func GetAllUsers(conn *redis.Client, mu *sync.Mutex) []string {
 	//gets all users including the recently added user
 	mu.Lock()
+	val, err := conn.Do(ctx, "SMEMBERS", "clients").Result()
+	mu.Unlock()
+	if err != nil {
+		panic(err)
+	}
+
+	allusers := make([]string, len(val.([]interface{})))
+	for p, value := range val.([]interface{}) {
+		allusers[p] = value.(string)
+	}
+	return allusers
+}
+
+func GetAllUsersOnline(conn *redis.Client, mu *sync.Mutex) []string {
+	//gets all users including the recently added user
+	mu.Lock()
 	val, err := conn.Do(ctx, "SMEMBERS", "clients:online").Result()
 	mu.Unlock()
 	if err != nil {
@@ -132,7 +148,7 @@ func AddUserRedis(conn *redis.Client, mu *sync.Mutex, poolname string, username 
 	}
 }
 
-func UpdateRedisClientsList(conn *redis.Client, mu *sync.Mutex) {
+func UpdateFrontEndClientsList(conn *redis.Client, mu *sync.Mutex) {
 	allusers := GetAllUsers(conn, mu)
 	// transform it to json
 	var allusersjson allUsersMessage = allUsersMessage{

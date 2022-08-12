@@ -110,11 +110,12 @@ func (pool *Pool) Start() {
 					ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
 					pool.mu.Lock()
 					pool.Clients[client.username] = client
-					UpdateRedisClientsList(pool.Redis, &pool.redismu)
+					// need to do this so that it does not receive msg from user not in the list
+					UpdateFrontEndClientsList(pool.Redis, &pool.redismu)
 					pool.mu.Unlock()
+
 					SendPreviousMessages(pool.Redis, &pool.redismu, client)
 
-					//SendPreviousMessages()
 					client.mu.Unlock()
 					break
 
@@ -139,7 +140,7 @@ func (pool *Pool) Start() {
 				pool.mu.Unlock()
 				//publish to redis
 				//in the future make a better way of updating user list in front-end
-				UpdateRedisClientsList(pool.Redis, &pool.redismu)
+				UpdateFrontEndClientsList(pool.Redis, &pool.redismu)
 
 				//add to local map of users in the server
 
@@ -230,9 +231,9 @@ func (pool *Pool) PowerOff() {
 		client.mu.Lock()
 		//RemoveUserRedis(pool.Redis, client.username)
 
-		UpdateRedisClientsList(pool.Redis, &pool.redismu)
+		//UpdateFrontEndClientsList(pool.Redis, &pool.redismu)
 		fmt.Println("user", client.username, "disconnected ")
-		delete(pool.Clients, client.username)
+		client.Conn.Close()
 		client.mu.Unlock()
 	}
 	pool.mu.Unlock()

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 )
 
 func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
@@ -35,7 +34,7 @@ func setupRoutes(pool *websocket.Pool) {
 }
 
 func main() {
-	PORT := os.Getenv("PORT")
+	PORT := "8081"
 
 	fmt.Println("Server on listening port: " + PORT)
 
