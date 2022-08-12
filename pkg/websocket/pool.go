@@ -104,6 +104,11 @@ func (pool *Pool) Start() {
 					client.mu.Unlock()
 					break
 				} else {
+					if CheckUserOnline(pool.Redis, &pool.mu, client.username) {
+						fmt.Println("client is already logged in: ", client.username)
+						client.mu.Unlock()
+						break
+					}
 					pool.mu.Lock()
 					fmt.Println("user", client.username, "will LOGIN at", pool.name)
 					SetUserHashItem(pool.Redis, &pool.redismu, client.username, "server", pool.name)
