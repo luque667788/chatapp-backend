@@ -42,7 +42,7 @@ func main() {
 	defer pool.PowerOff()
 	setupRoutes(pool)
 
-	if err := http.ListenAndServe(":"+PORT, nil); err != nil {
+	if err := http.ListenAndServe(":80", nil); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 
