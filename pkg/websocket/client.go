@@ -36,7 +36,7 @@ func (c *Client) Read() {
 	}
 	//register to pool
 	if firstmsg.Type == 2 {
-		fmt.Println("received first messages")
+		fmt.Println("received register messages")
 		c.username = firstmsg.Username
 		c.password = firstmsg.Password
 
