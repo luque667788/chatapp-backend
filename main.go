@@ -34,7 +34,7 @@ func setupRoutes(pool *websocket.Pool) {
 }
 
 func main() {
-	PORT := ":"
+	PORT := ""
 
 	fmt.Println("Server on listening port: " + PORT)
 
