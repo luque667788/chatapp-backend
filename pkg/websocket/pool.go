@@ -135,8 +135,9 @@ func (pool *Pool) Start() {
 							panic(err)
 						}
 						fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
-						break
+
 					}
+					break
 				}
 				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
 
