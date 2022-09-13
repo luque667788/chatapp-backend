@@ -79,13 +79,14 @@ func (pool *Pool) subscribeToMessages() {
 }
 func (pool *Pool) Start() {
 	pool.redismu.Lock()
-	val, err := pool.Redis.Do(ctx, "INCR", "server:number").Result()
+	//val, err := pool.Redis.Do(ctx, "INCR", "server:number").Result()
+	/*val := 1
 	pool.redismu.Unlock()
 	if err != nil {
 		panic(err)
-	}
+	}*/
 	pool.mu.Lock()
-	pool.name = fmt.Sprint("server:", val)
+	pool.name = fmt.Sprint("server:", 1)
 	pool.mu.Unlock()
 
 	fmt.Println("name " + pool.name)
