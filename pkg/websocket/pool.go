@@ -162,9 +162,9 @@ func (pool *Pool) Start() {
 				UpdateFrontEndClientsList(pool.Redis, &pool.redismu)
 
 				//add to local map of users in the server
-
+				fmt.Println("sign up suceeded")
 				client.mu.Unlock()
-				fmt.Println("user", client.username, " sing up suceeded, pool.name)
+				
 				break
 			}
 
