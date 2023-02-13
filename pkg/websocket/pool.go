@@ -164,6 +164,7 @@ func (pool *Pool) Start() {
 				//add to local map of users in the server
 
 				client.mu.Unlock()
+				fmt.Println("user", client.username, " sing up suceeded, pool.name)
 				break
 			}
 
