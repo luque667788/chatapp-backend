@@ -148,13 +148,18 @@ func (pool *Pool) Start() {
 					panic(err)
 				}
 				client.password = string(Hash)
+				fmt.Println("sign up suceeded1")
 				pool.mu.Lock()
 				AddUserRedis(pool.Redis, &pool.redismu, pool.name, client.username)
+				fmt.Println("sign up suceeded2")
 				pool.mu.Unlock()
 				SetUserHashItem(pool.Redis, &pool.redismu, client.username, "password", client.password)
+				fmt.Println("sign up suceeded3")
 				ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
+				fmt.Println("sign up suceeded4")
 				pool.mu.Lock()
 				pool.Clients[client.username] = client
+				fmt.Println("sign up suceeded5")
 				pool.mu.Unlock()
 				//publish to redis
 				//in the future make a better way of updating user list in front-end
