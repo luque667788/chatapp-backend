@@ -163,7 +163,6 @@ func (pool *Pool) Start() {
 				//add to local map of users in the server
 				fmt.Println("sign up suceeded")
 				client.mu.Unlock()
-				
 				break
 			}
 
