@@ -151,6 +151,7 @@ func (pool *Pool) Start() {
 				client.password = string(Hash)
 				fmt.Println("sign up suceeded1")
 				pool.mu.Lock()
+				fmt.Println("sign up suceedeskdfjsdkf44444444444d1")
 				AddUserRedis(pool.Redis, &pool.redismu, pool.name, client.username)
 				fmt.Println("sign up suceeded2")
 				pool.mu.Unlock()
