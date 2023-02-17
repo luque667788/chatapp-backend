@@ -48,6 +48,8 @@ func (c *Client) Read() {
 		return
 	}
 	go c.writeMessages()
+
+	//read messages
 	for {
 
 		var msg Message
