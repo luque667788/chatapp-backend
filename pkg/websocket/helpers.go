@@ -135,13 +135,17 @@ func SetUserHashItem(conn *redis.Client, mu *sync.Mutex, username string, key st
 
 func AddUserRedis(conn *redis.Client, mu *sync.Mutex, poolname string, username string) {
 	mu.Lock()
+	fmt.Println("mutex unlocked")
 	_, err := conn.Do(ctx, "HSET", username, "server", poolname).Result()
+	fmt.Println("changed redis database")
 	mu.Unlock()
 	if err != nil {
 		panic(err)
 	}
 	mu.Lock()
+	fmt.Println("mutex unlocked2")
 	_, errr := conn.Do(ctx, "SADD", "clients", username).Result()
+	fmt.Println("changed redis database2")
 	mu.Unlock()
 	if errr != nil {
 		panic(err)
