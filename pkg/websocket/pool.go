@@ -78,7 +78,7 @@ func (pool *Pool) subscribeToMessages() {
 
 }
 func (pool *Pool) Start() {
-	pool.redismu.Lock()
+	//pool.redismu.Lock()
 	//val, err := pool.Redis.Do(ctx, "INCR", "server:number").Result()
 	/*val := 1
 	pool.redismu.Unlock()
