@@ -32,9 +32,9 @@ func NewPool() *Pool {
 		Clients:    make(map[string]*Client),
 		SendMsg:    make(chan Message),
 		Redis: redis.NewClient(&redis.Options{
-			Addr:     "redis-13532.c9.us-east-1-4.ec2.cloud.redislabs.com:13532",
+			Addr:     "redis-17314.c14.us-east-1-3.ec2.cloud.redislabs.com:17314",
 			Username: "default",
-			Password: "bMwiZn4onMRvbSC9fBEmyL2iDuuUxbnK",
+			Password: "IlWXZUNwhIVN2jzRFnHAndnevXWnO3qy",
 			DB:       0,
 		}),
 		name: "",
