@@ -9,8 +9,9 @@ import (
 )
 
 type Client struct {
-	username string
-	password string
+	username   string
+	password   string
+	registered bool
 	//in the future add an array for tags for groups and etc..
 	Conn      *websocket.Conn
 	Pool      *Pool
@@ -21,9 +22,11 @@ type Client struct {
 
 func (c *Client) Read() {
 	// this function is called if an error occurs and it just unregister from the pool and closes the connection
+	// the problem is that when an someone tries to log in in an acount that already online when the IMPOSTOR closes the tab this method will be called and the person will be disconnected
 	defer func() {
-
-		c.Pool.Unregister <- c
+		if c.registered {
+			c.Pool.Unregister <- c
+		}
 		c.Conn.Close()
 	}()
 

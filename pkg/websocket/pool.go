@@ -67,7 +67,7 @@ func (pool *Pool) subscribeToMessages() {
 			//decode Message
 			var Message = DecodeJson([]byte(msg.Payload))
 
-			fmt.Println("Sending Message to:" + Message.Destinatary + " from: " + Message.User)
+			fmt.Println("Sending Message to: " + Message.Destinatary + " from: " + Message.User)
 			pool.mu.Lock()
 			pool.Clients[Message.Destinatary].WriteChan <- []byte(msg.Payload)
 			pool.mu.Unlock()
@@ -103,6 +103,7 @@ func (pool *Pool) Start() {
 						panic(err)
 					}
 					fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
+					client.StopChan <- true
 
 				}
 				break
@@ -111,18 +112,22 @@ func (pool *Pool) Start() {
 
 				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
 				if err != nil {
+					client.registered = false
 					client.StopChan <- true
 					fmt.Println("incorrect password for username: ", client.username)
 					client.mu.Unlock()
 					break
 				} else {
 					if CheckUserOnline(pool.Redis, &pool.mu, client.username) {
-						fmt.Println("client is already logged in: ", client.username)
+						client.registered = false
+						client.StopChan <- true
+						fmt.Println("client is already online: ", client.username)
 						client.mu.Unlock()
 						break
 					}
 					pool.mu.Lock()
 					fmt.Println("user", client.username, "will LOGIN at", pool.name)
+					client.registered = true
 					SetUserHashItem(pool.Redis, &pool.redismu, client.username, "server", pool.name)
 					pool.mu.Unlock()
 					ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
@@ -149,19 +154,15 @@ func (pool *Pool) Start() {
 					panic(err)
 				}
 				client.password = string(Hash)
-				fmt.Println("sign up suceeded1")
+
 				pool.mu.Lock()
-				fmt.Println("sign up suceedeskdfjsdkf44444444444d1")
 				AddUserRedis(pool.Redis, &pool.redismu, pool.name, client.username)
-				fmt.Println("sign up suceeded2")
 				pool.mu.Unlock()
 				SetUserHashItem(pool.Redis, &pool.redismu, client.username, "password", client.password)
-				fmt.Println("sign up suceeded3")
 				ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
-				fmt.Println("sign up suceeded4")
+				client.registered = true
 				pool.mu.Lock()
 				pool.Clients[client.username] = client
-				fmt.Println("sign up suceeded5")
 				pool.mu.Unlock()
 				//publish to redis
 				//in the future make a better way of updating user list in front-end
@@ -186,13 +187,14 @@ func (pool *Pool) Start() {
 				client.mu.Unlock()
 				break
 			}
+			client.registered = false
 			DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
 			fmt.Println("user", client.username, "disconnected ")
 			pool.mu.Lock()
 			delete(pool.Clients, client.username)
 			pool.mu.Unlock()
 			client.mu.Unlock()
-			break
+
 		//received a Message
 		case Message := <-pool.SendMsg:
 			if CheckUserHashExist(pool.Redis, &pool.redismu, Message.Destinatary) == false {
@@ -239,7 +241,6 @@ func (pool *Pool) Start() {
 			publishMessage(pool.Redis, &pool.redismu, EncodeJson(Message), GetUserServerRedis(pool.Redis, &pool.redismu, Message.Destinatary))
 			pool.mu.Unlock()
 			SaveMessageDB(pool.Redis, &pool.redismu, Message)
-			break
 
 		}
 	}

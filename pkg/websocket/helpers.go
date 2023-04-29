@@ -80,7 +80,7 @@ func RemoveUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
 
 func DeactivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
 
-	fmt.Println("user", username, "is being deactivated ")
+	fmt.Println("user", username, "is being deactivated from redis DB")
 	mu.Lock()
 	_, err := conn.Do(ctx, "SREM", "clients:online", username).Result()
 	mu.Unlock()
@@ -90,6 +90,7 @@ func DeactivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
 }
 
 func ActivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
+	fmt.Println("user", username, "is being activated from redis DB")
 	mu.Lock()
 	_, err := conn.Do(ctx, "SADD", "clients:online", username).Result()
 	mu.Unlock()
