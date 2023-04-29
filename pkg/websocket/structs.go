@@ -8,6 +8,11 @@ type Message struct {
 	Time        string `json:"time"`
 }
 
+type ErrorMessage struct {
+	Type    int    `json:"type"`
+	Content string `json:"content"`
+}
+
 type allUsersMessage struct {
 	Type     int      `json:"type"`
 	AllUsers []string `json:"allusers"`

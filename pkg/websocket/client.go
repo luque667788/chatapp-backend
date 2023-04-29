@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -11,7 +12,7 @@ import (
 type Client struct {
 	username   string
 	password   string
-	registered bool
+	registered string
 	//in the future add an array for tags for groups and etc..
 	Conn      *websocket.Conn
 	Pool      *Pool
@@ -24,7 +25,7 @@ func (c *Client) Read() {
 	// this function is called if an error occurs and it just unregister from the pool and closes the connection
 	// the problem is that when an someone tries to log in in an acount that already online when the IMPOSTOR closes the tab this method will be called and the person will be disconnected
 	defer func() {
-		if c.registered {
+		if c.registered == "yes" {
 			c.Pool.Unregister <- c
 		}
 		c.Conn.Close()
@@ -78,8 +79,24 @@ func (c *Client) writeMessages() {
 				return
 			}
 		case a := <-c.StopChan:
-			if a == true {
-				fmt.Println("stoping because pool asked")
+			if a {
+
+				fmt.Println("stoping because pool asked: -{", c.registered)
+				var msge ErrorMessage = ErrorMessage{
+					Type:    4,
+					Content: c.registered,
+				}
+
+				payload, err := json.Marshal(msge)
+				if err != nil {
+					panic(err)
+				}
+				if err := c.Conn.WriteMessage(1, []byte(payload)); err != nil {
+					c.mu.Lock()
+					fmt.Println("could not send CONNECTION STATUS to user: ", c.username, "because of ERROR::")
+					c.mu.Unlock()
+					fmt.Println(err)
+				}
 				return
 			}
 

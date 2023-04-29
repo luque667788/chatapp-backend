@@ -112,14 +112,14 @@ func (pool *Pool) Start() {
 
 				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
 				if err != nil {
-					client.registered = false
+					client.registered = "Wrong Password"
 					client.StopChan <- true
 					fmt.Println("incorrect password for username: ", client.username)
 					client.mu.Unlock()
 					break
 				} else {
 					if CheckUserOnline(pool.Redis, &pool.mu, client.username) {
-						client.registered = false
+						client.registered = "user already online, please make sure you arent already logged in in other device"
 						client.StopChan <- true
 						fmt.Println("client is already online: ", client.username)
 						client.mu.Unlock()
@@ -127,7 +127,7 @@ func (pool *Pool) Start() {
 					}
 					pool.mu.Lock()
 					fmt.Println("user", client.username, "will LOGIN at", pool.name)
-					client.registered = true
+					client.registered = "yes"
 					SetUserHashItem(pool.Redis, &pool.redismu, client.username, "server", pool.name)
 					pool.mu.Unlock()
 					ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
@@ -160,7 +160,7 @@ func (pool *Pool) Start() {
 				pool.mu.Unlock()
 				SetUserHashItem(pool.Redis, &pool.redismu, client.username, "password", client.password)
 				ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
-				client.registered = true
+				client.registered = "yes"
 				pool.mu.Lock()
 				pool.Clients[client.username] = client
 				pool.mu.Unlock()
@@ -187,7 +187,7 @@ func (pool *Pool) Start() {
 				client.mu.Unlock()
 				break
 			}
-			client.registered = false
+			client.registered = "kicked out"
 			DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
 			fmt.Println("user", client.username, "disconnected ")
 			pool.mu.Lock()
@@ -212,7 +212,7 @@ func (pool *Pool) Start() {
 			}
 			// FOR NOW it wil be like that
 			if CheckUserOnline(pool.Redis, &pool.redismu, Message.Destinatary) == false {
-				fmt.Println(" user: ", Message.Destinatary, "do is NOT ONLINE sp we are archiving the messages for later sending it when avaible")
+				fmt.Println(" user: ", Message.Destinatary, " is NOT ONLINE sp we are archiving the messages for later sending it when avaible")
 				pool.mu.Lock()
 				pool.Clients[Message.User].WriteChan <- []byte(EncodeJson(Message))
 				pool.mu.Unlock()
