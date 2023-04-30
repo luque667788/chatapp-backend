@@ -103,6 +103,7 @@ func (pool *Pool) Start() {
 						panic(err)
 					}
 					fmt.Println("admin user logged in, flushingALL DB info!!!!!!!")
+					client.registered = "admin user, deleting all the database info"
 					client.StopChan <- true
 
 				}
