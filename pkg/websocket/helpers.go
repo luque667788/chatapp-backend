@@ -22,9 +22,23 @@ func publishMessage(conn *redis.Client, mu *sync.Mutex, payload []byte, channel 
 }
 
 func GetAllUsers(conn *redis.Client, mu *sync.Mutex) []string {
-	//gets all users including the recently added user
 	mu.Lock()
 	val, err := conn.Do(ctx, "SMEMBERS", "clients:online").Result()
+	mu.Unlock()
+	if err != nil {
+		panic(err)
+	}
+
+	allusers := make([]string, len(val.([]interface{})))
+	for p, value := range val.([]interface{}) {
+		allusers[p] = value.(string)
+	}
+	return allusers
+}
+
+func GetAllRegisteredUsers(conn *redis.Client, mu *sync.Mutex) []string {
+	mu.Lock()
+	val, err := conn.Do(ctx, "SMEMBERS", "clients").Result()
 	mu.Unlock()
 	if err != nil {
 		panic(err)
@@ -133,8 +147,7 @@ func AddUserRedis(conn *redis.Client, mu *sync.Mutex, poolname string, username 
 }
 
 func UpdateRedisClientsList(conn *redis.Client, mu *sync.Mutex) {
-	allusers := GetAllUsers(conn, mu)
-	// transform it to json
+	allusers := GetAllRegisteredUsers(conn, mu)
 	var allusersjson allUsersMessage = allUsersMessage{
 		Type:     3,
 		AllUsers: allusers,
@@ -144,7 +157,6 @@ func UpdateRedisClientsList(conn *redis.Client, mu *sync.Mutex) {
 	if err != nil {
 		panic(err)
 	}
-	//publish to redis
 	publishMessage(conn, mu, payload, registerChannel)
 }
 
@@ -174,7 +186,6 @@ func DecodeJson(payload []byte) Message {
 }
 
 func GetUserServerRedis(conn *redis.Client, mu *sync.Mutex, username string) string {
-	//this function should only be used if it already known that the user exists in redis
 
 	return GetUserHashItem(conn, mu, username, "server")
 }
@@ -190,7 +201,6 @@ func SaveMessageDB(conn *redis.Client, mu *sync.Mutex, msg Message) {
 }
 
 func SendPreviousMessages(conn *redis.Client, mu *sync.Mutex, client *Client) {
-	//gets all users including the recently added user
 	mu.Lock()
 	val, err := conn.Do(ctx, "SMEMBERS", "clients").Result()
 	mu.Unlock()
@@ -204,6 +214,7 @@ func SendPreviousMessages(conn *redis.Client, mu *sync.Mutex, client *Client) {
 	}
 	for _, name := range allusers {
 		if name != client.username {
+
 			room := CompareUsername(client.username, name)
 			mu.Lock()
 			val2, err2 := conn.Do(ctx, "LRANGE", room, "0", "-1").Result()

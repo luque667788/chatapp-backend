@@ -55,6 +55,11 @@ func (pool *Pool) subscribeToMessages() {
 		switch msg.Channel {
 		case registerChannel:
 			pool.mu.Lock()
+			if len(pool.Clients) == 0 {
+				fmt.Println("No clients in the pool to send the message to.")
+				pool.mu.Unlock()
+				break
+			}
 			fmt.Println("--|sending  to all users on " + pool.name + "  the updated the users list|")
 			for _, _client := range pool.Clients {
 				_client.WriteChan <- []byte(msg.Payload)
@@ -91,11 +96,18 @@ func (pool *Pool) Start() {
 	go pool.subscribeToMessages()
 	for {
 		select {
-		//register in the pool
 		case client := <-pool.Register:
 			client.mu.Lock()
 			if CheckUserHashExist(pool.Redis, &pool.mu, client.username) {
+				// check if user is already online
+				if CheckUserOnline(pool.Redis, &pool.redismu, client.username) {
+					fmt.Println("user: ", client.username, "is already online but try to login")
+					client.StopChan <- true
+					client.mu.Unlock()
+					break
+				}
 
+				//check if password is correct
 				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
 				if err != nil {
 					client.StopChan <- true
@@ -114,7 +126,7 @@ func (pool *Pool) Start() {
 					pool.mu.Unlock()
 					SendPreviousMessages(pool.Redis, &pool.redismu, client)
 
-					//SendPreviousMessages()
+					client.forcedsocketclose = false
 					client.mu.Unlock()
 					break
 
@@ -122,8 +134,6 @@ func (pool *Pool) Start() {
 
 			} else {
 				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
-
-				//add user password
 				Hash, err := Hash(client.password)
 				if err != nil {
 					panic(err)
@@ -137,25 +147,20 @@ func (pool *Pool) Start() {
 				pool.mu.Lock()
 				pool.Clients[client.username] = client
 				pool.mu.Unlock()
-				//publish to redis
-				//in the future make a better way of updating user list in front-end
 				UpdateRedisClientsList(pool.Redis, &pool.redismu)
-
-				//add to local map of users in the server
-
+				client.forcedsocketclose = false
 				client.mu.Unlock()
 				break
 			}
 
-		// unregister from the pool
 		case client := <-pool.Unregister:
 			client.mu.Lock()
-			if CheckUserHashExist(pool.Redis, &pool.redismu, client.username) == false {
+			if !CheckUserHashExist(pool.Redis, &pool.redismu, client.username) {
 				fmt.Println("user: ", client.username, "do not exist but tries to unregister")
 				client.mu.Unlock()
 				break
 			}
-			if CheckUserOnline(pool.Redis, &pool.redismu, client.username) == false {
+			if !CheckUserOnline(pool.Redis, &pool.redismu, client.username) {
 				fmt.Println("-------------------->user ", client.username, " was rejected and is diconnecting")
 				client.mu.Unlock()
 				break
@@ -167,24 +172,23 @@ func (pool *Pool) Start() {
 			pool.mu.Unlock()
 			client.mu.Unlock()
 			break
+
 		//received a Message
 		case Message := <-pool.SendMsg:
-			if CheckUserHashExist(pool.Redis, &pool.redismu, Message.Destinatary) == false {
-				fmt.Println("user: ", Message.Destinatary, "do not exist but tries to receive message")
+			if !CheckUserHashExist(pool.Redis, &pool.redismu, Message.Destinatary) {
+				fmt.Println("user: ", Message.Destinatary, "do NOT EXIST but tries to receive message")
 				break
 			}
-			if CheckUserHashExist(pool.Redis, &pool.redismu, Message.User) == false {
-				fmt.Println("user: ", Message.User, "do not exist But something is very wrong")
-				panic("USER DOESE EXISTS BUT SENDS MESSAGES (code has a bug!!!!!!)")
-			}
-			if CheckUserOnline(pool.Redis, &pool.redismu, Message.User) == false {
-				fmt.Println(" user: ", Message.Destinatary, "do is NOT ONLINE but tries to SEND message")
-				panic("USER IS NOT ONLINE BUT SENDS MESSAGES (code has a bug!!!!!!)")
+			if !CheckUserHashExist(pool.Redis, &pool.redismu, Message.User) {
+				fmt.Println("user: ", Message.User, "do NOT EXIST but tries to send message")
 				break
 			}
-			// FOR NOW it wil be like that
-			if CheckUserOnline(pool.Redis, &pool.redismu, Message.Destinatary) == false {
-				fmt.Println(" user: ", Message.Destinatary, "do is NOT ONLINE sp we are archiving the messages for later sending it when avaible")
+			if !CheckUserOnline(pool.Redis, &pool.redismu, Message.User) {
+				fmt.Println(" user: ", Message.Destinatary, " is NOT ONLINE but tries to SEND message")
+				break
+			}
+			if !CheckUserOnline(pool.Redis, &pool.redismu, Message.Destinatary) {
+				fmt.Println(" user: ", Message.Destinatary, "is NOT ONLINE, archiving the messages for later sending when avaible")
 				pool.mu.Lock()
 				pool.Clients[Message.User].WriteChan <- []byte(EncodeJson(Message))
 				pool.mu.Unlock()
@@ -193,23 +197,23 @@ func (pool *Pool) Start() {
 			}
 
 			/*
-				IMPLEMENTATION
-					-each user has a set with conversation he participates
 
-					-after sending a message we archive the message to a set with all messages of a conversation
+				-each user has a set with conversation he participates
 
-					-and the destinatary and sender of the message conversation list sets will be added
-					(or overwritten rewritten) with the messages conversation(which we do not know)
+				-after sending a message we archive the message to a set with all messages of a conversation
 
-					-the name of the chat will be the names of the users in alphabetical order like "alice:joao"
+				-the destinatary and sender of the message conversation list sets will be added
+				(or overwritten rewritten) with the messages conversation
+				- only one redis set will be used for each conversation so:
+				->>>the name of the chat will be the names of the users in alphabetical order like "alice:joao"
 
 			*/
 
-			//send Message to user who sent the Message
+			//sends Message to user who sent the Message
 			pool.mu.Lock()
 			pool.Clients[Message.User].WriteChan <- []byte(EncodeJson(Message))
 
-			//send Message to user wo will receive Message (it may be in other server)
+			//sends Message to user who will receive Message (it may be in other server (horizontal scaling))
 			publishMessage(pool.Redis, &pool.redismu, EncodeJson(Message), GetUserServerRedis(pool.Redis, &pool.redismu, Message.Destinatary))
 			pool.mu.Unlock()
 			SaveMessageDB(pool.Redis, &pool.redismu, Message)
@@ -220,15 +224,10 @@ func (pool *Pool) Start() {
 }
 
 func (pool *Pool) PowerOff() {
-	// properly warn other servers that this server is turning off
-	//need to implemenet a way of transfering clients
-	// or implement a way of warining client that the server was powered off
-	//and maybe gray out the client on the front end
 	fmt.Println(pool.name + " powering off")
 	pool.mu.Lock()
 	for _, client := range pool.Clients {
 		client.mu.Lock()
-		//RemoveUserRedis(pool.Redis, client.username)
 
 		UpdateRedisClientsList(pool.Redis, &pool.redismu)
 		fmt.Println("user", client.username, "disconnected ")

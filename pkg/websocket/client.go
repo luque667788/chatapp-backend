@@ -9,38 +9,37 @@ import (
 )
 
 type Client struct {
-	username string
-	password string
-	//in the future add an array for tags for groups and etc..
-	Conn      *websocket.Conn
-	Pool      *Pool
-	StopChan  chan bool
-	WriteChan chan []byte
-	mu        sync.Mutex
+	username          string
+	password          string
+	Conn              *websocket.Conn
+	Pool              *Pool
+	StopChan          chan bool
+	WriteChan         chan []byte
+	mu                sync.Mutex
+	forcedsocketclose bool
 }
 
 func (c *Client) Read() {
 	// this function is called if an error occurs and it just unregister from the pool and closes the connection
 	defer func() {
-
-		c.Pool.Unregister <- c
+		if !c.forcedsocketclose {
+			c.Pool.Unregister <- c
+		}
 		c.Conn.Close()
 	}()
+	c.forcedsocketclose = true
 
-	// LOGIN
 	var firstmsg RegisterMessage
 	err := c.Conn.ReadJSON(&firstmsg)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	//register to pool
 	if firstmsg.Type == 2 {
 		fmt.Println("received first messages")
 		c.username = firstmsg.Username
 		c.password = firstmsg.Password
 
-		// after that i should start using mutex for safety
 		c.Pool.Register <- c
 
 	} else {
@@ -56,7 +55,6 @@ func (c *Client) Read() {
 			log.Println(err)
 			return
 		}
-		// SendMsg Message to channel
 		c.Pool.SendMsg <- msg
 	}
 }
@@ -73,8 +71,8 @@ func (c *Client) writeMessages() {
 				return
 			}
 		case a := <-c.StopChan:
-			if a == true {
-				fmt.Println("stoping because pool asked")
+			if a {
+				fmt.Println("stoping websocket connection because pool asked")
 				return
 			}
 
