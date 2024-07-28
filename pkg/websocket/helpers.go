@@ -251,6 +251,11 @@ func CompareUsername(user1 string, user2 string) string {
 	} else if []rune(user1)[0] == []rune(user2)[0] {
 		i := 1
 		for {
+			if i == len(user1) {
+				return fmt.Sprint(user1, ":", user2)
+			} else if i == len(user2) {
+				return fmt.Sprint(user2, ":", user1)
+			}
 			if []rune(user1)[i] > []rune(user2)[i] {
 				return fmt.Sprint(user1, ":", user2)
 			} else if []rune(user1)[i] < []rune(user2)[i] {
