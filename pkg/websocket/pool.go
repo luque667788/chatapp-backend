@@ -49,7 +49,15 @@ func (pool *Pool) subscribeToMessages() {
 	for {
 		msg, err := pubsub.ReceiveMessage(ctx)
 		if err != nil {
-			panic(err)
+			fmt.Println("error in receiving message from redis")
+			pool.mu.Lock()
+			for _, _client := range pool.Clients {
+				senderrortoclient(_client, "internal server error:redissubscription")
+				DeactivateUserRedis(pool.Redis, &pool.redismu, _client.username)
+				_client.StopChan <- true
+				delete(pool.Clients, _client.username)
+			}
+			pool.mu.Unlock()
 		}
 
 		switch msg.Channel {
@@ -102,6 +110,7 @@ func (pool *Pool) Start() {
 				// check if user is already online
 				if CheckUserOnline(pool.Redis, &pool.redismu, client.username) {
 					fmt.Println("user: ", client.username, "is already online but try to login")
+					senderrortoclient(client, "user is already online on another device")
 					client.StopChan <- true
 					client.mu.Unlock()
 					break
@@ -110,6 +119,7 @@ func (pool *Pool) Start() {
 				//check if password is correct
 				err := VerifyPassword(GetUserHashItem(pool.Redis, &pool.redismu, client.username, "password"), client.password)
 				if err != nil {
+					senderrortoclient(client, "incorrect password")
 					client.StopChan <- true
 					fmt.Println("incorrect password for username: ", client.username)
 					client.mu.Unlock()
@@ -136,7 +146,16 @@ func (pool *Pool) Start() {
 				fmt.Println("user", client.username, "will be SIGNUP at", pool.name)
 				Hash, err := Hash(client.password)
 				if err != nil {
-					panic(err)
+					//iterate though all clients and send a message to all of them an error message saying internal server error
+					pool.mu.Lock()
+					for _, _client := range pool.Clients {
+						fmt.Println("internal server error:hashing")
+						senderrortoclient(_client, "internal server error:hashing")
+						DeactivateUserRedis(pool.Redis, &pool.redismu, _client.username)
+						_client.StopChan <- true
+						delete(pool.Clients, _client.username)
+					}
+					pool.mu.Unlock()
 				}
 				client.password = string(Hash)
 				pool.mu.Lock()
@@ -167,6 +186,7 @@ func (pool *Pool) Start() {
 			}
 			DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
 			fmt.Println("user", client.username, "disconnected ")
+			client.StopChan <- true
 			pool.mu.Lock()
 			delete(pool.Clients, client.username)
 			pool.mu.Unlock()
@@ -228,10 +248,11 @@ func (pool *Pool) PowerOff() {
 	pool.mu.Lock()
 	for _, client := range pool.Clients {
 		client.mu.Lock()
-
+		senderrortoclient(client, "server is powering off")
 		UpdateRedisClientsList(pool.Redis, &pool.redismu)
 		fmt.Println("user", client.username, "disconnected ")
 		DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
+		client.StopChan <- true
 		delete(pool.Clients, client.username)
 		client.mu.Unlock()
 	}

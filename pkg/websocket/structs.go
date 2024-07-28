@@ -19,3 +19,8 @@ type RegisterMessage struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
+type ErrorMessage struct {
+	Type    int    `json:"type"`
+	Content string `json:"content"`
+}
