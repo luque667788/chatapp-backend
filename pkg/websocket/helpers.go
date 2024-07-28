@@ -85,14 +85,27 @@ func DeactivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
 	if err != nil {
 		panic(err)
 	}
+	mu.Lock()
+	_, err2 := conn.Do(ctx, "HSET", username, "server", "notdefined").Result()
+	mu.Unlock()
+	if err2 != nil {
+		panic(err2)
+	}
 }
 
-func ActivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string) {
+func ActivateUserRedis(conn *redis.Client, mu *sync.Mutex, username string, poolname string) {
 	mu.Lock()
 	_, err := conn.Do(ctx, "SADD", "clients:online", username).Result()
 	mu.Unlock()
 	if err != nil {
 		panic(err)
+	}
+	mu.Lock()
+
+	_, err2 := conn.Do(ctx, "HSET", username, "server", poolname).Result()
+	mu.Unlock()
+	if err2 != nil {
+		panic(err2)
 	}
 }
 
@@ -133,16 +146,10 @@ func SetUserHashItem(conn *redis.Client, mu *sync.Mutex, username string, key st
 
 func AddUserRedis(conn *redis.Client, mu *sync.Mutex, poolname string, username string) {
 	mu.Lock()
-	_, err := conn.Do(ctx, "HSET", username, "server", poolname).Result()
-	mu.Unlock()
-	if err != nil {
-		panic(err)
-	}
-	mu.Lock()
 	_, errr := conn.Do(ctx, "SADD", "clients", username).Result()
 	mu.Unlock()
 	if errr != nil {
-		panic(err)
+		panic(errr)
 	}
 }
 
