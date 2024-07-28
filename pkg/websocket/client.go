@@ -47,8 +47,14 @@ func (c *Client) Read() {
 		return
 	}
 	go c.writeMessages()
-	for {
+	select {
+	case a := <-c.StopChan:
+		if a {
+			fmt.Println("stoping websocket connection because pool asked(1)")
 
+			return
+		}
+	default:
 		var msg Message
 		err := c.Conn.ReadJSON(&msg)
 		if err != nil {
@@ -72,7 +78,7 @@ func (c *Client) writeMessages() {
 			}
 		case a := <-c.StopChan:
 			if a {
-				fmt.Println("stoping websocket connection because pool asked")
+				fmt.Println("stoping websocket connection because pool asked(2)")
 				return
 			}
 
