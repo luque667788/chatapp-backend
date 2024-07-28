@@ -119,7 +119,7 @@ func (pool *Pool) Start() {
 					fmt.Println("user", client.username, "will LOGIN at", pool.name)
 					SetUserHashItem(pool.Redis, &pool.redismu, client.username, "server", pool.name)
 					pool.mu.Unlock()
-					ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
+					ActivateUserRedis(pool.Redis, &pool.redismu, client.username, pool.name)
 					pool.mu.Lock()
 					pool.Clients[client.username] = client
 					UpdateRedisClientsList(pool.Redis, &pool.redismu)
@@ -143,7 +143,7 @@ func (pool *Pool) Start() {
 				AddUserRedis(pool.Redis, &pool.redismu, pool.name, client.username)
 				pool.mu.Unlock()
 				SetUserHashItem(pool.Redis, &pool.redismu, client.username, "password", client.password)
-				ActivateUserRedis(pool.Redis, &pool.redismu, client.username)
+				ActivateUserRedis(pool.Redis, &pool.redismu, client.username, pool.name)
 				pool.mu.Lock()
 				pool.Clients[client.username] = client
 				pool.mu.Unlock()
@@ -231,9 +231,11 @@ func (pool *Pool) PowerOff() {
 
 		UpdateRedisClientsList(pool.Redis, &pool.redismu)
 		fmt.Println("user", client.username, "disconnected ")
+		DeactivateUserRedis(pool.Redis, &pool.redismu, client.username)
 		delete(pool.Clients, client.username)
 		client.mu.Unlock()
 	}
+	//TODO delete the server from the list of servers
 	pool.mu.Unlock()
 
 }
