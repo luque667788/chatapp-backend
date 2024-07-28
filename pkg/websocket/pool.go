@@ -235,7 +235,7 @@ func (pool *Pool) PowerOff() {
 		delete(pool.Clients, client.username)
 		client.mu.Unlock()
 	}
-	//TODO delete the server from the list of servers
+	//TODO! delete the server from the list of servers
 	pool.mu.Unlock()
 
 }
