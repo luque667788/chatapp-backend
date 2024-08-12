@@ -46,9 +46,7 @@ This repository contains the backend code for a realtime chat application. The b
    docker run -p 8080:8080 chatapp-backend
    ```
 
-3. Access the application: Open your browser and navigate to `http://localhost:8080`.
-
-Remember to also clone and run the [frontend repo](https://github.com/luque667788/webdev).
+3. Remeber to have the [frontend repo](https://github.com/luque667788/webdev) and the redis server running
 
 ## Notes
 
