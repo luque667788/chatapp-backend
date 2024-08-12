@@ -16,11 +16,8 @@ COPY . .
 # Build the Go app
 RUN go build -o main .
 
-# Stage 2: Setup Redis and run the Go server
+# Stage 2: Run the Go server
 FROM alpine:latest
-
-# Install Redis
-RUN apk add --no-cache redis
 
 # Copy the pre-built binary from the builder stage
 COPY --from=builder /app/main /usr/local/bin/main
@@ -28,5 +25,5 @@ COPY --from=builder /app/main /usr/local/bin/main
 # Expose the port the app runs on
 EXPOSE 8080
 
-# Start Redis and the Go server
-CMD redis-server --daemonize yes && /usr/local/bin/main 8080
+# Start the Go server
+CMD ["/usr/local/bin/main", "8080"]
