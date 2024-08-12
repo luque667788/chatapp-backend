@@ -7,8 +7,8 @@ This repository contains the backend code for a realtime chat application. The b
 - **User Handling and Authentication**: Basic user management and authentication mechanisms.
 - **Message Saving**: Stores chat messages for retrieval.
 - **WebSocket Communication**: Real-time messaging using WebSockets.
-- **Redis Integration**: Uses Redis for data storage and caching.
-- **Docker Deployment**: Easily deployable using Docker.
+- **Redis Integration**: Uses Redis for data storage.
+- **Docker Deployment**: Easily deployable locally using Docker.
 
 
 ## Key Files and Directories
@@ -20,7 +20,7 @@ This repository contains the backend code for a realtime chat application. The b
   - **`pool.go`**: Manages a pool of WebSocket connections.
   - **`structs.go`**: Defines data structures used in WebSocket communication.
   - **`websocket.go`**: Initializes WebSocket connections and handles incoming requests.
-- **`Dockerfile`**: Docker configuration for building and running the application.
+- **`Dockerfile`**: Docker configuration for building and running the application locally.
 - **`go.mod`**: Go module file listing dependencies.
 
 ## Getting Started
