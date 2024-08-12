@@ -10,19 +10,6 @@ This repository contains the backend code for a realtime chat application. The b
 - **Redis Integration**: Uses Redis for data storage and caching.
 - **Docker Deployment**: Easily deployable using Docker.
 
-## Project Structure
-
-├── Dockerfile \
-├── go.mod    \
-├── go.sum \
-├── main.go  \
-├── pkg/  \
-    └── websocket/  \
-    ├── client.go  \
-    ├── helpers.go  \
-    ├── pool.go  \
-    │── structs.go \
-    └── websocket.go \
 
 ## Key Files and Directories
 
