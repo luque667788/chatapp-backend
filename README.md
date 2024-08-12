@@ -2,6 +2,9 @@
 
 This repository contains the backend code for a realtime chat application. The backend is written in Go and uses WebSockets for real-time communication and Redis for data storage. This project was developed as part of my learning journey in software development, and while it implements basic functionality, it may not follow all best practices.
 
+The app right now is deployed with docker(docker-compose file that setups the frontend, backend and the redis database) and runs in a cloud vm hosted on digital ocean
+the following link is may be available for testing: [app.chatluiz.tech]. 
+
 ## Features
 
 - **User Handling and Authentication**: Basic user management and authentication mechanisms.
