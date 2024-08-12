@@ -28,7 +28,7 @@ This repository contains the backend code for a realtime chat application. The b
 ### Prerequisites
 
 - Go 1.17 or later
-- Docker
+- or Docker
 
 ### Running the Application
 
