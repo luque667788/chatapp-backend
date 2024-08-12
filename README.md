@@ -17,12 +17,12 @@ This repository contains the backend code for a realtime chat application. The b
 ├── go.sum \
 ├── main.go  \
 ├── pkg/  \
-└── websocket/  \
-├── client.go  \
-├── helpers.go  \
-├── pool.go  \
-│── structs.go  \
-└── websocket.go  \
+    └── websocket/  \
+    ├── client.go  \
+    ├── helpers.go  \
+    ├── pool.go  \
+    │── structs.go  \
+    └── websocket.go  \
 
 ## Key Files and Directories
 
